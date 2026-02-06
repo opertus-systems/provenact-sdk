@@ -63,7 +63,7 @@ let out = sdk.execute_verified(ExecuteRequest {
 
 let receipt = sdk.parse_receipt(out.receipt_path)?;
 println!("{}", receipt.raw["schema_version"]);
-# Ok::<(), inactu_sdk::SdkError>(())
+// Ok::<(), inactu_sdk::SdkError>(())
 ```
 
 ## Versioning
