@@ -1,0 +1,66 @@
+name: Conformance Smoke
+
+on:
+  workflow_dispatch:
+    inputs:
+      inactu_repo:
+        description: "Optional owner/repo for substrate checkout (defaults to <this-owner>/inactu)"
+        required: false
+        type: string
+
+jobs:
+  smoke:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout SDK
+        uses: actions/checkout@v4
+
+      - name: Resolve inactu repository
+        id: repo
+        shell: bash
+        run: |
+          if [ -n "${{ inputs.inactu_repo }}" ]; then
+            echo "repo=${{ inputs.inactu_repo }}" >> "$GITHUB_OUTPUT"
+          else
+            echo "repo=${{ github.repository_owner }}/inactu" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Checkout Inactu substrate
+        uses: actions/checkout@v4
+        with:
+          repository: ${{ steps.repo.outputs.repo }}
+          path: inactu
+
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Rust cache
+        uses: Swatinem/rust-cache@v2
+
+      - name: Build inactu-cli
+        working-directory: inactu
+        run: cargo build -p inactu-cli
+
+      - name: Run SDK smoke tests against vectors
+        env:
+          INACTU_VECTOR_ROOT: ${{ github.workspace }}/inactu
+          INACTU_CLI_BIN: ${{ github.workspace }}/inactu/target/debug/inactu-cli
+        run: cargo test --test conformance_smoke -- --nocapture
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: "npm"
+          cache-dependency-path: typescript/package-lock.json
+
+      - name: Install TypeScript SDK deps
+        working-directory: typescript
+        run: npm ci
+
+      - name: Run TypeScript SDK smoke test against vectors
+        working-directory: typescript
+        env:
+          INACTU_VECTOR_ROOT: ${{ github.workspace }}/inactu
+          INACTU_CLI_BIN: ${{ github.workspace }}/inactu/target/debug/inactu-cli
+        run: npm test

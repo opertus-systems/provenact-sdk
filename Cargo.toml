@@ -1,0 +1,15 @@
+[package]
+name = "inactu-sdk"
+version = "0.1.0-alpha.1"
+edition = "2024"
+license = "Apache-2.0"
+description = "Rust-first SDK for Inactu verify/execute/receipt flows"
+repository = "https://github.com/inactu/inactu-sdk"
+
+[dependencies]
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+thiserror = "2"
+
+[dev-dependencies]
+tempfile = "3"

@@ -1,0 +1,21 @@
+{
+  "name": "@inactu/sdk",
+  "version": "0.1.0-alpha.1",
+  "description": "TypeScript SDK for Inactu verify/execute/receipt flows",
+  "license": "Apache-2.0",
+  "type": "commonjs",
+  "main": "dist/src/index.js",
+  "types": "dist/src/index.d.ts",
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "check": "tsc -p tsconfig.json --noEmit",
+    "test": "npm run build && node --test dist/test/*.test.js"
+  },
+  "devDependencies": {
+    "@types/node": "^20.17.30",
+    "typescript": "^5.8.3"
+  }
+}
