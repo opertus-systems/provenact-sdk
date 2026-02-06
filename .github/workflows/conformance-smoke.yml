@@ -1,6 +1,8 @@
 name: Conformance Smoke
 
 on:
+  push:
+  pull_request:
   workflow_dispatch:
     inputs:
       inactu_repo:
