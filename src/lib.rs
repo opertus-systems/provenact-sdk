@@ -1,4 +1,4 @@
-use std::ffi::OsStr;
+use std::ffi::{OsStr, OsString};
 use std::path::{Path, PathBuf};
 use std::process::Command;
 
@@ -92,12 +92,30 @@ impl CommandRunner for CliRunner {
         I: IntoIterator<Item = S>,
         S: AsRef<OsStr>,
     {
-        let output = Command::new(&self.bin).args(args).output()?;
+        let collected: Vec<OsString> = args
+            .into_iter()
+            .map(|arg| arg.as_ref().to_os_string())
+            .collect();
+        let output = Command::new(&self.bin).args(&collected).output()?;
         if output.status.success() {
             Ok(String::from_utf8_lossy(&output.stdout).to_string())
         } else {
+            let cmdline = collected
+                .iter()
+                .map(|arg| arg.to_string_lossy().into_owned())
+                .collect::<Vec<_>>()
+                .join(" ");
+            let status = output.status.code().map_or_else(
+                || "terminated-by-signal".to_string(),
+                |code| code.to_string(),
+            );
+            let stdout = String::from_utf8_lossy(&output.stdout).trim().to_string();
             let stderr = String::from_utf8_lossy(&output.stderr);
-            Err(SdkError::CommandFailed(stderr.trim().to_string()))
+            Err(SdkError::CommandFailed(format!(
+                "status={status} cmd=\"{} {cmdline}\" stdout=\"{stdout}\" stderr=\"{}\"",
+                self.bin.display(),
+                stderr.trim()
+            )))
         }
     }
 }
