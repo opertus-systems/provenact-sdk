@@ -83,6 +83,23 @@ test("parseReceipt reads json", async () => {
   assert.deepEqual(receipt.raw, { schema_version: "1.0.0" });
 });
 
+test("verifyBundle computes keysDigest when omitted", async () => {
+  const runner = new FakeRunner();
+  const sdk = new InactuSdk(runner);
+  const dir = await mkdtemp(join(tmpdir(), "inactu-sdk-ts-"));
+  const keysPath = join(dir, "keys.json");
+  await writeFile(keysPath, '{"keys":[]}', "utf8");
+
+  await sdk.verifyBundle({
+    bundle: "./bundle",
+    keys: keysPath,
+  });
+
+  const digestIndex = runner.lastArgs.indexOf("--keys-digest");
+  assert.ok(digestIndex >= 0);
+  assert.match(runner.lastArgs[digestIndex + 1] ?? "", /^sha256:[a-f0-9]{64}$/);
+});
+
 test("smoke verify against local inactu vector when configured", async (t: TestContext) => {
   const root = process.env.INACTU_VECTOR_ROOT;
   if (!root) {

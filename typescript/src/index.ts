@@ -1,5 +1,6 @@
 import { readFile } from "node:fs/promises";
 import { spawn } from "node:child_process";
+import { createHash } from "node:crypto";
 
 export interface VerifyRequest {
   bundle: string;
@@ -98,10 +99,9 @@ export class InactuSdk {
   async verifyBundle(req: VerifyRequest): Promise<VerifyOutput> {
     validateVerifyRequest(req);
 
+    const keysDigest = req.keysDigest ?? (await digestFile(req.keys));
     const args = ["verify", "--bundle", req.bundle, "--keys", req.keys];
-    if (req.keysDigest) {
-      args.push("--keys-digest", req.keysDigest);
-    }
+    args.push("--keys-digest", keysDigest);
     if (req.requireCosign) {
       args.push("--require-cosign");
     }
@@ -119,12 +119,15 @@ export class InactuSdk {
   async executeVerified(req: ExecuteRequest): Promise<ExecuteOutput> {
     validateExecuteRequest(req);
 
+    const keysDigest = req.keysDigest ?? (await digestFile(req.keys));
     const args = [
       "run",
       "--bundle",
       req.bundle,
       "--keys",
       req.keys,
+      "--keys-digest",
+      keysDigest,
       "--policy",
       req.policy,
       "--input",
@@ -132,9 +135,6 @@ export class InactuSdk {
       "--receipt",
       req.receipt,
     ];
-    if (req.keysDigest) {
-      args.push("--keys-digest", req.keysDigest);
-    }
     if (req.requireCosign) {
       args.push("--require-cosign");
     }
@@ -162,6 +162,15 @@ export class InactuSdk {
     } catch (err) {
       throw new SdkError("JSON_ERROR", (err as Error).message);
     }
+  }
+}
+
+async function digestFile(path: string): Promise<string> {
+  try {
+    const data = await readFile(path);
+    return `sha256:${createHash("sha256").update(data).digest("hex")}`;
+  } catch (err) {
+    throw new SdkError("IO_ERROR", (err as Error).message);
   }
 }
 
