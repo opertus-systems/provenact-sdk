@@ -3,8 +3,8 @@ name = "inactu-sdk"
 version = "0.1.0-alpha.1"
 edition = "2024"
 license = "Apache-2.0"
-description = "Rust-first SDK for Inactu verify/execute/receipt flows"
-repository = "https://github.com/opertus-systems/inactu-sdk"
+description = "Rust-first SDK for Provenact verify/execute/receipt flows"
+repository = "https://github.com/opertus-systems/provenact-sdk"
 
 [dependencies]
 serde = { version = "1", features = ["derive"] }

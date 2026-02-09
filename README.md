@@ -1,9 +1,9 @@
-# inactu-sdk
+# provenact-sdk
 
 [![Compatibility](https://img.shields.io/badge/compatibility-inactu_pinned-blue)](./COMPATIBILITY.md)
 [![Status](https://img.shields.io/badge/stability-0.x--alpha-orange)](./COMPATIBILITY.md)
 
-Rust-first SDK for Inactu verify/execute/receipt flows.
+Rust-first SDK for Provenact verify/execute/receipt flows.
 
 Ecosystem map: `inactu/docs/ecosystem.md` in the substrate repository.
 
