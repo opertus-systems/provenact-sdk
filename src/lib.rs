@@ -216,12 +216,25 @@ where
 }
 
 fn validate_verify_request(req: &VerifyRequest) -> Result<()> {
-    if req.keys_digest.is_none() {
+    if req
+        .keys_digest
+        .as_deref()
+        .map(str::trim)
+        .filter(|value| !value.is_empty())
+        .is_none()
+    {
         return Err(SdkError::InvalidRequest(
             "keys_digest is required for verify_bundle".to_string(),
         ));
     }
-    if req.require_cosign && req.oci_ref.is_none() {
+    if req.require_cosign
+        && req
+            .oci_ref
+            .as_deref()
+            .map(str::trim)
+            .filter(|value| !value.is_empty())
+            .is_none()
+    {
         return Err(SdkError::InvalidRequest(
             "oci_ref is required when require_cosign is true".to_string(),
         ));
@@ -230,12 +243,25 @@ fn validate_verify_request(req: &VerifyRequest) -> Result<()> {
 }
 
 fn validate_execute_request(req: &ExecuteRequest) -> Result<()> {
-    if req.keys_digest.is_none() {
+    if req
+        .keys_digest
+        .as_deref()
+        .map(str::trim)
+        .filter(|value| !value.is_empty())
+        .is_none()
+    {
         return Err(SdkError::InvalidRequest(
             "keys_digest is required for execute_verified".to_string(),
         ));
     }
-    if req.require_cosign && req.oci_ref.is_none() {
+    if req.require_cosign
+        && req
+            .oci_ref
+            .as_deref()
+            .map(str::trim)
+            .filter(|value| !value.is_empty())
+            .is_none()
+    {
         return Err(SdkError::InvalidRequest(
             "oci_ref is required when require_cosign is true".to_string(),
         ));
@@ -337,6 +363,44 @@ mod tests {
             receipt: PathBuf::from("./receipt.json"),
             require_cosign: true,
             oci_ref: None,
+            allow_experimental: false,
+        };
+
+        let err = sdk.execute_verified(req).expect_err("must fail");
+        assert!(matches!(err, SdkError::InvalidRequest(_)));
+    }
+
+    #[test]
+    fn verify_rejects_blank_keys_digest() {
+        let runner = FakeRunner::default();
+        let sdk = InactuSdk::with_runner(runner);
+
+        let req = VerifyRequest {
+            bundle: PathBuf::from("./bundle"),
+            keys: PathBuf::from("./keys.json"),
+            keys_digest: Some("   ".to_string()),
+            require_cosign: false,
+            oci_ref: None,
+            allow_experimental: false,
+        };
+
+        let err = sdk.verify_bundle(req).expect_err("must fail");
+        assert!(matches!(err, SdkError::InvalidRequest(_)));
+    }
+
+    #[test]
+    fn execute_rejects_blank_oci_ref_when_cosign_required() {
+        let runner = FakeRunner::default();
+        let sdk = InactuSdk::with_runner(runner);
+        let req = ExecuteRequest {
+            bundle: PathBuf::from("./bundle"),
+            keys: PathBuf::from("./keys.json"),
+            keys_digest: Some("sha256:abc".to_string()),
+            policy: PathBuf::from("./policy.json"),
+            input: PathBuf::from("./input.json"),
+            receipt: PathBuf::from("./receipt.json"),
+            require_cosign: true,
+            oci_ref: Some(" ".to_string()),
             allow_experimental: false,
         };
 

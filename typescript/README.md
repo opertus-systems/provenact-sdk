@@ -11,6 +11,8 @@ TypeScript mirror of the Rust `inactu-sdk` alpha surface.
 - `executeVerified(req)`
 - `parseReceipt(path)`
 
+`req.keysDigest` is required for both `verifyBundle` and `executeVerified`.
+
 ## Experimental API
 
 - `experimental.validateManifestV1(runner, manifestPath)`

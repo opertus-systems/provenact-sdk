@@ -8,7 +8,7 @@ fn main() -> Result<(), SdkError> {
     sdk.verify_bundle(VerifyRequest {
         bundle: PathBuf::from("./bundle"),
         keys: PathBuf::from("./public-keys.json"),
-        keys_digest: None,
+        keys_digest: Some("sha256:<public-keys-json-digest>".to_string()),
         require_cosign: false,
         oci_ref: None,
         allow_experimental: false,
@@ -17,7 +17,7 @@ fn main() -> Result<(), SdkError> {
     let exec = sdk.execute_verified(ExecuteRequest {
         bundle: PathBuf::from("./bundle"),
         keys: PathBuf::from("./public-keys.json"),
-        keys_digest: None,
+        keys_digest: Some("sha256:<public-keys-json-digest>".to_string()),
         policy: PathBuf::from("./policy.json"),
         input: PathBuf::from("./input.json"),
         receipt: PathBuf::from("./receipt.json"),
