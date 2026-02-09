@@ -1,9 +1,9 @@
-# @inactu/sdk (TypeScript)
+# @provenact/sdk (TypeScript)
 
-[![Compatibility](https://img.shields.io/badge/compatibility-inactu_pinned-blue)](../COMPATIBILITY.md)
+[![Compatibility](https://img.shields.io/badge/compatibility-provenact_pinned-blue)](../COMPATIBILITY.md)
 [![Status](https://img.shields.io/badge/stability-0.x--alpha-orange)](../COMPATIBILITY.md)
 
-TypeScript mirror of the Rust `inactu-sdk` alpha surface.
+TypeScript mirror of the Rust `provenact-sdk` alpha surface.
 
 ## Stable API (`0.x`)
 
@@ -27,8 +27,8 @@ npm test
 ## Smoke Test Against Local Substrate
 
 ```bash
-INACTU_VECTOR_ROOT=../../inactu \
-INACTU_CLI_BIN=../../inactu/target/debug/inactu-cli \
+PROVENACT_VECTOR_ROOT=../../provenact-cli \
+PROVENACT_CLI_BIN=../../provenact-cli/target/debug/provenact-cli \
 npm test
 ```
 

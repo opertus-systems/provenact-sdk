@@ -3,6 +3,7 @@ use std::path::{Path, PathBuf};
 use std::process::Command;
 
 use serde_json::Value;
+use sha2::{Digest, Sha256};
 use thiserror::Error;
 
 pub type Result<T> = std::result::Result<T, SdkError>;
@@ -50,7 +51,7 @@ pub struct Receipt {
 pub enum SdkError {
     #[error("invalid request: {0}")]
     InvalidRequest(String),
-    #[error("inactu-cli command failed: {0}")]
+    #[error("provenact-cli command failed: {0}")]
     CommandFailed(String),
     #[error("io error: {0}")]
     Io(#[from] std::io::Error),
@@ -73,7 +74,7 @@ pub struct CliRunner {
 impl Default for CliRunner {
     fn default() -> Self {
         Self {
-            bin: PathBuf::from("inactu-cli"),
+            bin: PathBuf::from("provenact-cli"),
         }
     }
 }
@@ -121,11 +122,11 @@ impl CommandRunner for CliRunner {
 }
 
 #[derive(Debug, Clone)]
-pub struct InactuSdk<R = CliRunner> {
+pub struct ProvenactSdk<R = CliRunner> {
     runner: R,
 }
 
-impl Default for InactuSdk<CliRunner> {
+impl Default for ProvenactSdk<CliRunner> {
     fn default() -> Self {
         Self {
             runner: CliRunner::default(),
@@ -133,7 +134,7 @@ impl Default for InactuSdk<CliRunner> {
     }
 }
 
-impl<R> InactuSdk<R>
+impl<R> ProvenactSdk<R>
 where
     R: CommandRunner,
 {
@@ -143,6 +144,7 @@ where
 
     pub fn verify_bundle(&self, req: VerifyRequest) -> Result<VerifyOutput> {
         validate_verify_request(&req)?;
+        let keys_digest = resolve_keys_digest(req.keys_digest, &req.keys)?;
 
         let mut args = vec![
             "verify".to_string(),
@@ -151,20 +153,13 @@ where
             "--keys".to_string(),
             req.keys.display().to_string(),
         ];
-        if let Some(digest) = req.keys_digest {
-            args.push("--keys-digest".to_string());
-            args.push(digest);
-        }
-        if req.require_cosign {
-            args.push("--require-cosign".to_string());
-        }
-        if let Some(oci_ref) = req.oci_ref {
-            args.push("--oci-ref".to_string());
-            args.push(oci_ref);
-        }
-        if req.allow_experimental {
-            args.push("--allow-experimental".to_string());
-        }
+        append_common_verify_flags(
+            &mut args,
+            Some(keys_digest),
+            req.require_cosign,
+            req.oci_ref,
+            req.allow_experimental,
+        );
 
         let stdout = self.runner.run(args)?;
         Ok(VerifyOutput { stdout })
@@ -172,6 +167,7 @@ where
 
     pub fn execute_verified(&self, req: ExecuteRequest) -> Result<ExecuteOutput> {
         validate_execute_request(&req)?;
+        let keys_digest = resolve_keys_digest(req.keys_digest, &req.keys)?;
 
         let mut args = vec![
             "run".to_string(),
@@ -186,20 +182,13 @@ where
             "--receipt".to_string(),
             req.receipt.display().to_string(),
         ];
-        if let Some(digest) = req.keys_digest {
-            args.push("--keys-digest".to_string());
-            args.push(digest);
-        }
-        if req.require_cosign {
-            args.push("--require-cosign".to_string());
-        }
-        if let Some(oci_ref) = req.oci_ref {
-            args.push("--oci-ref".to_string());
-            args.push(oci_ref);
-        }
-        if req.allow_experimental {
-            args.push("--allow-experimental".to_string());
-        }
+        append_common_verify_flags(
+            &mut args,
+            Some(keys_digest),
+            req.require_cosign,
+            req.oci_ref,
+            req.allow_experimental,
+        );
 
         let stdout = self.runner.run(args)?;
         Ok(ExecuteOutput {
@@ -215,12 +204,30 @@ where
     }
 }
 
-fn validate_verify_request(req: &VerifyRequest) -> Result<()> {
-    if req.keys_digest.is_none() {
-        return Err(SdkError::InvalidRequest(
-            "keys_digest is required for verify_bundle".to_string(),
-        ));
+fn append_common_verify_flags(
+    args: &mut Vec<String>,
+    keys_digest: Option<String>,
+    require_cosign: bool,
+    oci_ref: Option<String>,
+    allow_experimental: bool,
+) {
+    if let Some(digest) = keys_digest {
+        args.push("--keys-digest".to_string());
+        args.push(digest);
     }
+    if require_cosign {
+        args.push("--require-cosign".to_string());
+    }
+    if let Some(oci_ref) = oci_ref {
+        args.push("--oci-ref".to_string());
+        args.push(oci_ref);
+    }
+    if allow_experimental {
+        args.push("--allow-experimental".to_string());
+    }
+}
+
+fn validate_verify_request(req: &VerifyRequest) -> Result<()> {
     if req.require_cosign && req.oci_ref.is_none() {
         return Err(SdkError::InvalidRequest(
             "oci_ref is required when require_cosign is true".to_string(),
@@ -230,17 +237,25 @@ fn validate_verify_request(req: &VerifyRequest) -> Result<()> {
 }
 
 fn validate_execute_request(req: &ExecuteRequest) -> Result<()> {
-    if req.keys_digest.is_none() {
-        return Err(SdkError::InvalidRequest(
-            "keys_digest is required for execute_verified".to_string(),
-        ));
-    }
     if req.require_cosign && req.oci_ref.is_none() {
         return Err(SdkError::InvalidRequest(
             "oci_ref is required when require_cosign is true".to_string(),
         ));
     }
     Ok(())
+}
+
+fn resolve_keys_digest(value: Option<String>, keys_path: &Path) -> Result<String> {
+    match value {
+        Some(digest) => Ok(digest),
+        None => digest_file_sha256_prefixed(keys_path),
+    }
+}
+
+fn digest_file_sha256_prefixed(path: &Path) -> Result<String> {
+    let bytes = std::fs::read(path)?;
+    let digest = Sha256::digest(&bytes);
+    Ok(format!("sha256:{:x}", digest))
 }
 
 pub mod experimental {
@@ -296,7 +311,7 @@ mod tests {
     #[test]
     fn verify_builds_expected_args() {
         let runner = FakeRunner::default();
-        let sdk = InactuSdk::with_runner(runner);
+        let sdk = ProvenactSdk::with_runner(runner);
 
         let req = VerifyRequest {
             bundle: PathBuf::from("./bundle"),
@@ -327,7 +342,7 @@ mod tests {
     #[test]
     fn execute_requires_oci_ref_when_cosign_required() {
         let runner = FakeRunner::default();
-        let sdk = InactuSdk::with_runner(runner);
+        let sdk = ProvenactSdk::with_runner(runner);
         let req = ExecuteRequest {
             bundle: PathBuf::from("./bundle"),
             keys: PathBuf::from("./keys.json"),
@@ -347,7 +362,7 @@ mod tests {
     #[test]
     fn parse_receipt_reads_json() {
         let runner = FakeRunner::default();
-        let sdk = InactuSdk::with_runner(runner);
+        let sdk = ProvenactSdk::with_runner(runner);
         let dir = tempfile::tempdir().expect("tmp");
         let receipt_path = dir.path().join("receipt.json");
         std::fs::write(&receipt_path, r#"{"schema_version":"1.0.0"}"#).expect("write");

@@ -1,9 +1,9 @@
 use std::path::PathBuf;
 
-use inactu_sdk::{ExecuteRequest, InactuSdk, SdkError, VerifyRequest};
+use provenact_sdk::{ExecuteRequest, ProvenactSdk, SdkError, VerifyRequest};
 
 fn main() -> Result<(), SdkError> {
-    let sdk = InactuSdk::default();
+    let sdk = ProvenactSdk::default();
 
     sdk.verify_bundle(VerifyRequest {
         bundle: PathBuf::from("./bundle"),

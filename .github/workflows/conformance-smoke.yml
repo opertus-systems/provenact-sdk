@@ -5,8 +5,8 @@ on:
   pull_request:
   workflow_dispatch:
     inputs:
-      inactu_repo:
-        description: "Optional owner/repo for substrate checkout (defaults to <this-owner>/inactu)"
+      provenact_repo:
+        description: "Optional owner/repo for substrate checkout (defaults to <this-owner>/provenact-cli)"
         required: false
         type: string
 
@@ -14,7 +14,7 @@ permissions:
   contents: read
 
 env:
-  INACTU_SUBSTRATE_PIN: b45f54eaed1391bf88b9aadfc5083eda2bc3f0eb
+  PROVENACT_SUBSTRATE_PIN: b45f54eaed1391bf88b9aadfc5083eda2bc3f0eb
 
 jobs:
   smoke:
@@ -23,28 +23,28 @@ jobs:
       - name: Checkout SDK
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
 
-      - name: Resolve inactu repository
+      - name: Resolve substrate repository
         id: repo
         shell: bash
         run: |
-          if [ -n "${{ inputs.inactu_repo }}" ]; then
-            echo "repo=${{ inputs.inactu_repo }}" >> "$GITHUB_OUTPUT"
+          if [ -n "${{ inputs.provenact_repo }}" ]; then
+            echo "repo=${{ inputs.provenact_repo }}" >> "$GITHUB_OUTPUT"
           else
-            echo "repo=${{ github.repository_owner }}/inactu" >> "$GITHUB_OUTPUT"
+            echo "repo=${{ github.repository_owner }}/provenact-cli" >> "$GITHUB_OUTPUT"
           fi
 
-      - name: Checkout Inactu substrate
+      - name: Checkout substrate
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
         with:
           repository: ${{ steps.repo.outputs.repo }}
-          ref: ${{ env.INACTU_SUBSTRATE_PIN }}
-          path: inactu
+          ref: ${{ env.PROVENACT_SUBSTRATE_PIN }}
+          path: provenact-cli
 
       - name: Validate checked-out substrate pin
         run: |
-          ACTUAL="$(git -C inactu rev-parse HEAD)"
-          if [ "$ACTUAL" != "$INACTU_SUBSTRATE_PIN" ]; then
-            echo "substrate pin mismatch: expected $INACTU_SUBSTRATE_PIN, got $ACTUAL" >&2
+          ACTUAL="$(git -C provenact-cli rev-parse HEAD)"
+          if [ "$ACTUAL" != "$PROVENACT_SUBSTRATE_PIN" ]; then
+            echo "substrate pin mismatch: expected $PROVENACT_SUBSTRATE_PIN, got $ACTUAL" >&2
             exit 1
           fi
 
@@ -54,14 +54,14 @@ jobs:
       - name: Rust cache
         uses: Swatinem/rust-cache@779680da715d629ac1d338a641029a2f4372abb5
 
-      - name: Build inactu-cli
-        working-directory: inactu
-        run: cargo build -p inactu-cli
+      - name: Build provenact-cli
+        working-directory: provenact-cli
+        run: cargo build -p provenact-cli
 
       - name: Run SDK smoke tests against vectors
         env:
-          INACTU_VECTOR_ROOT: ${{ github.workspace }}/inactu
-          INACTU_CLI_BIN: ${{ github.workspace }}/inactu/target/debug/inactu-cli
+          PROVENACT_VECTOR_ROOT: ${{ github.workspace }}/provenact-cli
+          PROVENACT_CLI_BIN: ${{ github.workspace }}/provenact-cli/target/debug/provenact-cli
         run: cargo test --test conformance_smoke -- --nocapture
 
       - name: Setup Node
@@ -78,6 +78,6 @@ jobs:
       - name: Run TypeScript SDK smoke test against vectors
         working-directory: typescript
         env:
-          INACTU_VECTOR_ROOT: ${{ github.workspace }}/inactu
-          INACTU_CLI_BIN: ${{ github.workspace }}/inactu/target/debug/inactu-cli
+          PROVENACT_VECTOR_ROOT: ${{ github.workspace }}/provenact-cli
+          PROVENACT_CLI_BIN: ${{ github.workspace }}/provenact-cli/target/debug/provenact-cli
         run: npm test

@@ -59,7 +59,7 @@ export interface CommandRunner {
 export class CliRunner implements CommandRunner {
   readonly bin: string;
 
-  constructor(bin = "inactu-cli") {
+  constructor(bin = "provenact-cli") {
     this.bin = bin;
   }
 
@@ -89,7 +89,7 @@ export class CliRunner implements CommandRunner {
   }
 }
 
-export class InactuSdk {
+export class ProvenactSdk {
   private readonly runner: CommandRunner;
 
   constructor(runner: CommandRunner = new CliRunner()) {

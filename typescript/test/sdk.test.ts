@@ -6,7 +6,7 @@ import { join } from "node:path";
 
 import {
   CliRunner,
-  InactuSdk,
+  ProvenactSdk,
   SdkError,
   type CommandRunner,
   type ExecuteRequest,
@@ -24,7 +24,7 @@ class FakeRunner implements CommandRunner {
 
 test("verifyBundle builds expected args", async () => {
   const runner = new FakeRunner();
-  const sdk = new InactuSdk(runner);
+  const sdk = new ProvenactSdk(runner);
 
   const req: VerifyRequest = {
     bundle: "./bundle",
@@ -54,7 +54,7 @@ test("verifyBundle builds expected args", async () => {
 
 test("executeVerified enforces ociRef when requireCosign is true", async () => {
   const runner = new FakeRunner();
-  const sdk = new InactuSdk(runner);
+  const sdk = new ProvenactSdk(runner);
 
   const req: ExecuteRequest = {
     bundle: "./bundle",
@@ -74,8 +74,8 @@ test("executeVerified enforces ociRef when requireCosign is true", async () => {
 
 test("parseReceipt reads json", async () => {
   const runner = new FakeRunner();
-  const sdk = new InactuSdk(runner);
-  const dir = await mkdtemp(join(tmpdir(), "inactu-sdk-ts-"));
+  const sdk = new ProvenactSdk(runner);
+  const dir = await mkdtemp(join(tmpdir(), "provenact-sdk-ts-"));
   const receiptPath = join(dir, "receipt.json");
   await writeFile(receiptPath, '{"schema_version":"1.0.0"}', "utf8");
 
@@ -85,8 +85,8 @@ test("parseReceipt reads json", async () => {
 
 test("verifyBundle computes keysDigest when omitted", async () => {
   const runner = new FakeRunner();
-  const sdk = new InactuSdk(runner);
-  const dir = await mkdtemp(join(tmpdir(), "inactu-sdk-ts-"));
+  const sdk = new ProvenactSdk(runner);
+  const dir = await mkdtemp(join(tmpdir(), "provenact-sdk-ts-"));
   const keysPath = join(dir, "keys.json");
   await writeFile(keysPath, '{"keys":[]}', "utf8");
 
@@ -100,15 +100,15 @@ test("verifyBundle computes keysDigest when omitted", async () => {
   assert.match(runner.lastArgs[digestIndex + 1] ?? "", /^sha256:[a-f0-9]{64}$/);
 });
 
-test("smoke verify against local inactu vector when configured", async (t: TestContext) => {
-  const root = process.env.INACTU_VECTOR_ROOT;
+test("smoke verify against local provenact vector when configured", async (t: TestContext) => {
+  const root = process.env.PROVENACT_VECTOR_ROOT;
   if (!root) {
-    t.skip("set INACTU_VECTOR_ROOT to run smoke verify test");
+    t.skip("set PROVENACT_VECTOR_ROOT to run smoke verify test");
     return;
   }
 
-  const cli = process.env.INACTU_CLI_BIN ?? "inactu-cli";
-  const sdk = new InactuSdk(new CliRunner(cli));
+  const cli = process.env.PROVENACT_CLI_BIN ?? "provenact-cli";
+  const sdk = new ProvenactSdk(new CliRunner(cli));
 
   const out = await sdk.verifyBundle({
     bundle: join(root, "test-vectors/good/minimal-zero-cap"),
