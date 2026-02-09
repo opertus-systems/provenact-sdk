@@ -45,7 +45,7 @@ let sdk = InactuSdk::default();
 sdk.verify_bundle(VerifyRequest {
     bundle: PathBuf::from("./bundle"),
     keys: PathBuf::from("./public-keys.json"),
-    keys_digest: None,
+    keys_digest: Some("sha256:<public-keys-json-digest>".to_string()),
     require_cosign: false,
     oci_ref: None,
     allow_experimental: false,
@@ -54,7 +54,7 @@ sdk.verify_bundle(VerifyRequest {
 let out = sdk.execute_verified(ExecuteRequest {
     bundle: PathBuf::from("./bundle"),
     keys: PathBuf::from("./public-keys.json"),
-    keys_digest: None,
+    keys_digest: Some("sha256:<public-keys-json-digest>".to_string()),
     policy: PathBuf::from("./policy.json"),
     input: PathBuf::from("./input.json"),
     receipt: PathBuf::from("./receipt.json"),

@@ -1,8 +1,9 @@
 import test, { type TestContext } from "node:test";
 import assert from "node:assert/strict";
-import { mkdtemp, writeFile } from "node:fs/promises";
+import { mkdtemp, readFile, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { createHash } from "node:crypto";
 
 import {
   CliRunner,
@@ -59,6 +60,7 @@ test("executeVerified enforces ociRef when requireCosign is true", async () => {
   const req: ExecuteRequest = {
     bundle: "./bundle",
     keys: "./keys.json",
+    keysDigest: "sha256:abc",
     policy: "./policy.json",
     input: "./input.json",
     receipt: "./receipt.json",
@@ -83,21 +85,40 @@ test("parseReceipt reads json", async () => {
   assert.deepEqual(receipt.raw, { schema_version: "1.0.0" });
 });
 
-test("verifyBundle computes keysDigest when omitted", async () => {
+test("verifyBundle rejects missing keysDigest", async () => {
   const runner = new FakeRunner();
   const sdk = new InactuSdk(runner);
-  const dir = await mkdtemp(join(tmpdir(), "inactu-sdk-ts-"));
-  const keysPath = join(dir, "keys.json");
-  await writeFile(keysPath, '{"keys":[]}', "utf8");
 
-  await sdk.verifyBundle({
+  await assert.rejects(() => sdk.verifyBundle({
     bundle: "./bundle",
-    keys: keysPath,
+    keys: "./keys.json",
+  } as unknown as VerifyRequest), (err: unknown) => {
+    assert.ok(err instanceof SdkError);
+    assert.equal((err as SdkError).code, "INVALID_REQUEST");
+    return true;
   });
+});
 
-  const digestIndex = runner.lastArgs.indexOf("--keys-digest");
-  assert.ok(digestIndex >= 0);
-  assert.match(runner.lastArgs[digestIndex + 1] ?? "", /^sha256:[a-f0-9]{64}$/);
+test("executeVerified rejects blank ociRef when requireCosign is true", async () => {
+  const runner = new FakeRunner();
+  const sdk = new InactuSdk(runner);
+
+  const req: ExecuteRequest = {
+    bundle: "./bundle",
+    keys: "./keys.json",
+    keysDigest: "sha256:abc",
+    policy: "./policy.json",
+    input: "./input.json",
+    receipt: "./receipt.json",
+    requireCosign: true,
+    ociRef: " ",
+  };
+
+  await assert.rejects(() => sdk.executeVerified(req), (err: unknown) => {
+    assert.ok(err instanceof SdkError);
+    assert.equal((err as SdkError).code, "INVALID_REQUEST");
+    return true;
+  });
 });
 
 test("smoke verify against local inactu vector when configured", async (t: TestContext) => {
@@ -109,11 +130,19 @@ test("smoke verify against local inactu vector when configured", async (t: TestC
 
   const cli = process.env.INACTU_CLI_BIN ?? "inactu-cli";
   const sdk = new InactuSdk(new CliRunner(cli));
+  const keysPath = join(root, "test-vectors/good/minimal-zero-cap/public-keys.json");
+  const keysDigest = await sha256File(keysPath);
 
   const out = await sdk.verifyBundle({
     bundle: join(root, "test-vectors/good/minimal-zero-cap"),
-    keys: join(root, "test-vectors/good/minimal-zero-cap/public-keys.json"),
+    keys: keysPath,
+    keysDigest,
   });
 
   assert.match(out.stdout, /^OK (verify )?artifact=sha256:[a-f0-9]{64} signers=\d+$/m);
 });
+
+async function sha256File(path: string): Promise<string> {
+  const data = await readFile(path);
+  return `sha256:${createHash("sha256").update(data).digest("hex")}`;
+}

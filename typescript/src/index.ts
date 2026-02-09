@@ -1,11 +1,10 @@
 import { readFile } from "node:fs/promises";
 import { spawn } from "node:child_process";
-import { createHash } from "node:crypto";
 
 export interface VerifyRequest {
   bundle: string;
   keys: string;
-  keysDigest?: string;
+  keysDigest: string;
   requireCosign?: boolean;
   ociRef?: string;
   allowExperimental?: boolean;
@@ -14,7 +13,7 @@ export interface VerifyRequest {
 export interface ExecuteRequest {
   bundle: string;
   keys: string;
-  keysDigest?: string;
+  keysDigest: string;
   policy: string;
   input: string;
   receipt: string;
@@ -99,7 +98,7 @@ export class InactuSdk {
   async verifyBundle(req: VerifyRequest): Promise<VerifyOutput> {
     validateVerifyRequest(req);
 
-    const keysDigest = req.keysDigest ?? (await digestFile(req.keys));
+    const keysDigest = req.keysDigest!.trim();
     const args = ["verify", "--bundle", req.bundle, "--keys", req.keys];
     args.push("--keys-digest", keysDigest);
     if (req.requireCosign) {
@@ -119,7 +118,7 @@ export class InactuSdk {
   async executeVerified(req: ExecuteRequest): Promise<ExecuteOutput> {
     validateExecuteRequest(req);
 
-    const keysDigest = req.keysDigest ?? (await digestFile(req.keys));
+    const keysDigest = req.keysDigest!.trim();
     const args = [
       "run",
       "--bundle",
@@ -165,15 +164,6 @@ export class InactuSdk {
   }
 }
 
-async function digestFile(path: string): Promise<string> {
-  try {
-    const data = await readFile(path);
-    return `sha256:${createHash("sha256").update(data).digest("hex")}`;
-  } catch (err) {
-    throw new SdkError("IO_ERROR", (err as Error).message);
-  }
-}
-
 export const experimental = {
   async validateManifestV1(runner: CommandRunner, manifest: string): Promise<string> {
     return runner.run(["experimental-validate-manifest-v1", "--manifest", manifest]);
@@ -185,13 +175,19 @@ export const experimental = {
 };
 
 function validateVerifyRequest(req: VerifyRequest): void {
-  if (req.requireCosign && !req.ociRef) {
+  if (!req.keysDigest?.trim()) {
+    throw new SdkError("INVALID_REQUEST", "keysDigest is required and must not be blank");
+  }
+  if (req.requireCosign && !req.ociRef?.trim()) {
     throw new SdkError("INVALID_REQUEST", "ociRef is required when requireCosign is true");
   }
 }
 
 function validateExecuteRequest(req: ExecuteRequest): void {
-  if (req.requireCosign && !req.ociRef) {
+  if (!req.keysDigest?.trim()) {
+    throw new SdkError("INVALID_REQUEST", "keysDigest is required and must not be blank");
+  }
+  if (req.requireCosign && !req.ociRef?.trim()) {
     throw new SdkError("INVALID_REQUEST", "ociRef is required when requireCosign is true");
   }
 }
