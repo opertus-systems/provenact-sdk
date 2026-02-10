@@ -2,7 +2,7 @@
 
 ## Boundary
 
-`inactu-sdk` is a client library for execution workflows.
+`provenact-sdk` is a client library for execution workflows.
 It does not perform orchestration decisions.
 
 ## Design (0.1 alpha)
@@ -11,7 +11,7 @@ It does not perform orchestration decisions.
   - verify bundle
   - execute verified bundle
   - parse receipt JSON
-- Implementation delegates to `inactu-cli` for behavioral parity with substrate
+- Implementation delegates to `provenact-cli` for behavioral parity with substrate
   conformance tests.
 - Experimental operations live in the `experimental` module.
 

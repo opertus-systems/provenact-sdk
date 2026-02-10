@@ -2,7 +2,7 @@
 
 ## Scope Guardrails
 
-`inactu-sdk` is an SDK layer over Inactu substrate behavior.
+`provenact-sdk` is an SDK layer over Provenact substrate behavior.
 
 Allowed:
 - stable SDK ergonomics for verify/execute/receipt flows

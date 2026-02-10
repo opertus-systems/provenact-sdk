@@ -1,5 +1,6 @@
 import { readFile } from "node:fs/promises";
 import { spawn } from "node:child_process";
+import { isAbsolute } from "node:path";
 
 export interface VerifyRequest {
   bundle: string;
@@ -58,12 +59,22 @@ export interface CommandRunner {
 export class CliRunner implements CommandRunner {
   readonly bin: string;
 
-  constructor(bin = "inactu-cli") {
+  constructor(bin = "provenact-cli") {
     this.bin = bin;
   }
 
   run(args: string[]): Promise<string> {
     return new Promise((resolve, reject) => {
+      const allowPathCli = /^(1|true)$/i.test(process.env.PROVENACT_ALLOW_PATH_CLI ?? "");
+      if (!isAbsolute(this.bin) && !allowPathCli) {
+        reject(
+          new SdkError(
+            "INVALID_REQUEST",
+            "CliRunner binary must be an absolute path; set PROVENACT_ALLOW_PATH_CLI=1 to opt into PATH lookup"
+          )
+        );
+        return;
+      }
       const child = spawn(this.bin, args, { stdio: ["ignore", "pipe", "pipe"] });
       const stdoutChunks: Buffer[] = [];
       const stderrChunks: Buffer[] = [];
@@ -88,7 +99,7 @@ export class CliRunner implements CommandRunner {
   }
 }
 
-export class InactuSdk {
+export class ProvenactSdk {
   private readonly runner: CommandRunner;
 
   constructor(runner: CommandRunner = new CliRunner()) {

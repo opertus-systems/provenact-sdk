@@ -1,7 +1,7 @@
 {
-  "name": "@inactu/sdk",
+  "name": "@provenact/sdk",
   "version": "0.1.0-alpha.1",
-  "description": "TypeScript SDK for Inactu verify/execute/receipt flows",
+  "description": "TypeScript SDK for Provenact verify/execute/receipt flows",
   "license": "Apache-2.0",
   "type": "commonjs",
   "main": "dist/src/index.js",

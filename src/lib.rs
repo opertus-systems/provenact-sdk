@@ -50,7 +50,7 @@ pub struct Receipt {
 pub enum SdkError {
     #[error("invalid request: {0}")]
     InvalidRequest(String),
-    #[error("inactu-cli command failed: {0}")]
+    #[error("provenact-cli command failed: {0}")]
     CommandFailed(String),
     #[error("io error: {0}")]
     Io(#[from] std::io::Error),
@@ -73,7 +73,7 @@ pub struct CliRunner {
 impl Default for CliRunner {
     fn default() -> Self {
         Self {
-            bin: PathBuf::from("inactu-cli"),
+            bin: PathBuf::from("provenact-cli"),
         }
     }
 }
@@ -92,6 +92,14 @@ impl CommandRunner for CliRunner {
         I: IntoIterator<Item = S>,
         S: AsRef<OsStr>,
     {
+        let allow_path_bin = std::env::var("PROVENACT_ALLOW_PATH_CLI")
+            .map(|v| v == "1" || v.eq_ignore_ascii_case("true"))
+            .unwrap_or(false);
+        if !self.bin.is_absolute() && !allow_path_bin {
+            return Err(SdkError::InvalidRequest(
+                "CliRunner binary must be an absolute path; set PROVENACT_ALLOW_PATH_CLI=1 to opt into PATH lookup".to_string(),
+            ));
+        }
         let collected: Vec<OsString> = args
             .into_iter()
             .map(|arg| arg.as_ref().to_os_string())
@@ -121,11 +129,11 @@ impl CommandRunner for CliRunner {
 }
 
 #[derive(Debug, Clone)]
-pub struct InactuSdk<R = CliRunner> {
+pub struct ProvenactSdk<R = CliRunner> {
     runner: R,
 }
 
-impl Default for InactuSdk<CliRunner> {
+impl Default for ProvenactSdk<CliRunner> {
     fn default() -> Self {
         Self {
             runner: CliRunner::default(),
@@ -133,7 +141,7 @@ impl Default for InactuSdk<CliRunner> {
     }
 }
 
-impl<R> InactuSdk<R>
+impl<R> ProvenactSdk<R>
 where
     R: CommandRunner,
 {
@@ -322,7 +330,7 @@ mod tests {
     #[test]
     fn verify_builds_expected_args() {
         let runner = FakeRunner::default();
-        let sdk = InactuSdk::with_runner(runner);
+        let sdk = ProvenactSdk::with_runner(runner);
 
         let req = VerifyRequest {
             bundle: PathBuf::from("./bundle"),
@@ -353,7 +361,7 @@ mod tests {
     #[test]
     fn execute_requires_oci_ref_when_cosign_required() {
         let runner = FakeRunner::default();
-        let sdk = InactuSdk::with_runner(runner);
+        let sdk = ProvenactSdk::with_runner(runner);
         let req = ExecuteRequest {
             bundle: PathBuf::from("./bundle"),
             keys: PathBuf::from("./keys.json"),
@@ -373,7 +381,7 @@ mod tests {
     #[test]
     fn verify_rejects_blank_keys_digest() {
         let runner = FakeRunner::default();
-        let sdk = InactuSdk::with_runner(runner);
+        let sdk = ProvenactSdk::with_runner(runner);
 
         let req = VerifyRequest {
             bundle: PathBuf::from("./bundle"),
@@ -391,7 +399,7 @@ mod tests {
     #[test]
     fn execute_rejects_blank_oci_ref_when_cosign_required() {
         let runner = FakeRunner::default();
-        let sdk = InactuSdk::with_runner(runner);
+        let sdk = ProvenactSdk::with_runner(runner);
         let req = ExecuteRequest {
             bundle: PathBuf::from("./bundle"),
             keys: PathBuf::from("./keys.json"),
@@ -411,7 +419,7 @@ mod tests {
     #[test]
     fn parse_receipt_reads_json() {
         let runner = FakeRunner::default();
-        let sdk = InactuSdk::with_runner(runner);
+        let sdk = ProvenactSdk::with_runner(runner);
         let dir = tempfile::tempdir().expect("tmp");
         let receipt_path = dir.path().join("receipt.json");
         std::fs::write(&receipt_path, r#"{"schema_version":"1.0.0"}"#).expect("write");
