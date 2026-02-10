@@ -6,7 +6,7 @@ on:
   workflow_dispatch:
     inputs:
       provenact_repo:
-        description: "Optional owner/repo for substrate checkout (defaults to <this-owner>/provenact)"
+        description: "Optional owner/repo for substrate checkout (defaults to <this-owner>/provenact-cli)"
         required: false
         type: string
 
@@ -30,7 +30,7 @@ jobs:
           if [ -n "${{ inputs.provenact_repo }}" ]; then
             echo "repo=${{ inputs.provenact_repo }}" >> "$GITHUB_OUTPUT"
           else
-            echo "repo=${{ github.repository_owner }}/provenact" >> "$GITHUB_OUTPUT"
+            echo "repo=${{ github.repository_owner }}/provenact-cli" >> "$GITHUB_OUTPUT"
           fi
 
       - name: Checkout Provenact substrate
