@@ -14,7 +14,7 @@ permissions:
   contents: read
 
 env:
-  PROVENACT_SUBSTRATE_PIN: b45f54eaed1391bf88b9aadfc5083eda2bc3f0eb
+  PROVENACT_SUBSTRATE_PIN: 5e611c1fca7f433556a38b743d7e820de2345e47
 
 jobs:
   smoke:
