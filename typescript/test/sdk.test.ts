@@ -62,6 +62,21 @@ test("verifyBundle builds expected args", async () => {
   assert.ok(runner.lastArgs.includes("--allow-experimental"));
 });
 
+test("verifyBundle trims keysDigest before forwarding", async () => {
+  const runner = new FakeRunner();
+  const sdk = new ProvenactSdk(runner);
+
+  await sdk.verifyBundle({
+    bundle: "./bundle",
+    keys: "./keys.json",
+    keysDigest: "  sha256:abc  ",
+  });
+
+  const digestFlagIndex = runner.lastArgs.indexOf("--keys-digest");
+  assert.notEqual(digestFlagIndex, -1);
+  assert.equal(runner.lastArgs[digestFlagIndex + 1], "sha256:abc");
+});
+
 test("executeVerified enforces ociRef when requireCosign is true", async () => {
   const runner = new FakeRunner();
   const sdk = new ProvenactSdk(runner);

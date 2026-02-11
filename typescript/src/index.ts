@@ -42,6 +42,16 @@ export interface Receipt {
   raw: unknown;
 }
 
+type CommonRequest = {
+  keysDigest?: string;
+  requireCosign?: boolean;
+  ociRef?: string;
+  cosignKey?: string;
+  cosignCertIdentity?: string;
+  cosignCertOidcIssuer?: string;
+  allowExperimental?: boolean;
+};
+
 export type ErrorCode =
   | "INVALID_REQUEST"
   | "COMMAND_FAILED"
@@ -113,38 +123,17 @@ export class ProvenactSdk {
   }
 
   async verifyBundle(req: VerifyRequest): Promise<VerifyOutput> {
-    validateVerifyRequest(req);
-
-    const keysDigest = req.keysDigest!.trim();
+    const keysDigest = validateRequest(req);
     const args = ["verify", "--bundle", req.bundle, "--keys", req.keys];
     args.push("--keys-digest", keysDigest);
-    if (req.requireCosign) {
-      args.push("--require-cosign");
-    }
-    if (req.ociRef) {
-      args.push("--oci-ref", req.ociRef);
-    }
-    if (req.cosignKey) {
-      args.push("--cosign-key", req.cosignKey);
-    }
-    if (req.cosignCertIdentity) {
-      args.push("--cosign-cert-identity", req.cosignCertIdentity);
-    }
-    if (req.cosignCertOidcIssuer) {
-      args.push("--cosign-cert-oidc-issuer", req.cosignCertOidcIssuer);
-    }
-    if (req.allowExperimental) {
-      args.push("--allow-experimental");
-    }
+    appendCommonFlags(args, req);
 
     const stdout = await this.runner.run(args);
     return { stdout };
   }
 
   async executeVerified(req: ExecuteRequest): Promise<ExecuteOutput> {
-    validateExecuteRequest(req);
-
-    const keysDigest = req.keysDigest!.trim();
+    const keysDigest = validateRequest(req);
     const args = [
       "run",
       "--bundle",
@@ -160,24 +149,7 @@ export class ProvenactSdk {
       "--receipt",
       req.receipt,
     ];
-    if (req.requireCosign) {
-      args.push("--require-cosign");
-    }
-    if (req.ociRef) {
-      args.push("--oci-ref", req.ociRef);
-    }
-    if (req.cosignKey) {
-      args.push("--cosign-key", req.cosignKey);
-    }
-    if (req.cosignCertIdentity) {
-      args.push("--cosign-cert-identity", req.cosignCertIdentity);
-    }
-    if (req.cosignCertOidcIssuer) {
-      args.push("--cosign-cert-oidc-issuer", req.cosignCertOidcIssuer);
-    }
-    if (req.allowExperimental) {
-      args.push("--allow-experimental");
-    }
+    appendCommonFlags(args, req);
 
     const stdout = await this.runner.run(args);
     return { stdout, receiptPath: req.receipt };
@@ -209,38 +181,52 @@ export const experimental = {
   },
 };
 
-function validateVerifyRequest(req: VerifyRequest): void {
-  if (!req.keysDigest?.trim()) {
-    throw new SdkError("INVALID_REQUEST", "keysDigest is required and must not be blank");
-  }
-  if (req.requireCosign && !req.ociRef?.trim()) {
-    throw new SdkError("INVALID_REQUEST", "ociRef is required when requireCosign is true");
-  }
-  if (req.requireCosign && !req.cosignKey?.trim()) {
-    throw new SdkError("INVALID_REQUEST", "cosignKey is required when requireCosign is true");
-  }
-  if (req.requireCosign && !req.cosignCertIdentity?.trim()) {
-    throw new SdkError("INVALID_REQUEST", "cosignCertIdentity is required when requireCosign is true");
-  }
-  if (req.requireCosign && !req.cosignCertOidcIssuer?.trim()) {
-    throw new SdkError("INVALID_REQUEST", "cosignCertOidcIssuer is required when requireCosign is true");
-  }
+function normalizeOptional(value: string | undefined): string | undefined {
+  const normalized = value?.trim();
+  return normalized ? normalized : undefined;
 }
 
-function validateExecuteRequest(req: ExecuteRequest): void {
-  if (!req.keysDigest?.trim()) {
+function validateRequest(req: CommonRequest): string {
+  const keysDigest = normalizeOptional(req.keysDigest);
+  if (!keysDigest) {
     throw new SdkError("INVALID_REQUEST", "keysDigest is required and must not be blank");
   }
-  if (req.requireCosign && !req.ociRef?.trim()) {
+  if (req.requireCosign && !normalizeOptional(req.ociRef)) {
     throw new SdkError("INVALID_REQUEST", "ociRef is required when requireCosign is true");
   }
-  if (req.requireCosign && !req.cosignKey?.trim()) {
+  if (req.requireCosign && !normalizeOptional(req.cosignKey)) {
     throw new SdkError("INVALID_REQUEST", "cosignKey is required when requireCosign is true");
   }
-  if (req.requireCosign && !req.cosignCertIdentity?.trim()) {
+  if (req.requireCosign && !normalizeOptional(req.cosignCertIdentity)) {
     throw new SdkError("INVALID_REQUEST", "cosignCertIdentity is required when requireCosign is true");
   }
-  if (req.requireCosign && !req.cosignCertOidcIssuer?.trim()) {
+  if (req.requireCosign && !normalizeOptional(req.cosignCertOidcIssuer)) {
     throw new SdkError("INVALID_REQUEST", "cosignCertOidcIssuer is required when requireCosign is true");
+  }
+  return keysDigest;
+}
+
+function appendCommonFlags(args: string[], req: CommonRequest): void {
+  if (req.requireCosign) {
+    args.push("--require-cosign");
+  }
+  const ociRef = normalizeOptional(req.ociRef);
+  if (ociRef) {
+    args.push("--oci-ref", ociRef);
+  }
+  const cosignKey = normalizeOptional(req.cosignKey);
+  if (cosignKey) {
+    args.push("--cosign-key", cosignKey);
+  }
+  const cosignCertIdentity = normalizeOptional(req.cosignCertIdentity);
+  if (cosignCertIdentity) {
+    args.push("--cosign-cert-identity", cosignCertIdentity);
+  }
+  const cosignCertOidcIssuer = normalizeOptional(req.cosignCertOidcIssuer);
+  if (cosignCertOidcIssuer) {
+    args.push("--cosign-cert-oidc-issuer", cosignCertOidcIssuer);
+  }
+  if (req.allowExperimental) {
+    args.push("--allow-experimental");
   }
 }

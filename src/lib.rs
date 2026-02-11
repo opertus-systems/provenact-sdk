@@ -156,7 +156,7 @@ where
     }
 
     pub fn verify_bundle(&self, req: VerifyRequest) -> Result<VerifyOutput> {
-        validate_verify_request(&req)?;
+        let keys_digest = validate_request(&req, "verify_bundle")?;
 
         let mut args = vec![
             "verify".to_string(),
@@ -164,40 +164,17 @@ where
             req.bundle.display().to_string(),
             "--keys".to_string(),
             req.keys.display().to_string(),
+            "--keys-digest".to_string(),
+            keys_digest,
         ];
-        if let Some(digest) = req.keys_digest {
-            args.push("--keys-digest".to_string());
-            args.push(digest);
-        }
-        if req.require_cosign {
-            args.push("--require-cosign".to_string());
-        }
-        if let Some(oci_ref) = req.oci_ref {
-            args.push("--oci-ref".to_string());
-            args.push(oci_ref);
-        }
-        if let Some(cosign_key) = req.cosign_key {
-            args.push("--cosign-key".to_string());
-            args.push(cosign_key.display().to_string());
-        }
-        if let Some(cosign_cert_identity) = req.cosign_cert_identity {
-            args.push("--cosign-cert-identity".to_string());
-            args.push(cosign_cert_identity);
-        }
-        if let Some(cosign_cert_oidc_issuer) = req.cosign_cert_oidc_issuer {
-            args.push("--cosign-cert-oidc-issuer".to_string());
-            args.push(cosign_cert_oidc_issuer);
-        }
-        if req.allow_experimental {
-            args.push("--allow-experimental".to_string());
-        }
+        append_common_flags(&mut args, &req);
 
         let stdout = self.runner.run(args)?;
         Ok(VerifyOutput { stdout })
     }
 
     pub fn execute_verified(&self, req: ExecuteRequest) -> Result<ExecuteOutput> {
-        validate_execute_request(&req)?;
+        let keys_digest = validate_request(&req, "execute_verified")?;
 
         let mut args = vec![
             "run".to_string(),
@@ -205,6 +182,8 @@ where
             req.bundle.display().to_string(),
             "--keys".to_string(),
             req.keys.display().to_string(),
+            "--keys-digest".to_string(),
+            keys_digest,
             "--policy".to_string(),
             req.policy.display().to_string(),
             "--input".to_string(),
@@ -212,32 +191,7 @@ where
             "--receipt".to_string(),
             req.receipt.display().to_string(),
         ];
-        if let Some(digest) = req.keys_digest {
-            args.push("--keys-digest".to_string());
-            args.push(digest);
-        }
-        if req.require_cosign {
-            args.push("--require-cosign".to_string());
-        }
-        if let Some(oci_ref) = req.oci_ref {
-            args.push("--oci-ref".to_string());
-            args.push(oci_ref);
-        }
-        if let Some(cosign_key) = req.cosign_key {
-            args.push("--cosign-key".to_string());
-            args.push(cosign_key.display().to_string());
-        }
-        if let Some(cosign_cert_identity) = req.cosign_cert_identity {
-            args.push("--cosign-cert-identity".to_string());
-            args.push(cosign_cert_identity);
-        }
-        if let Some(cosign_cert_oidc_issuer) = req.cosign_cert_oidc_issuer {
-            args.push("--cosign-cert-oidc-issuer".to_string());
-            args.push(cosign_cert_oidc_issuer);
-        }
-        if req.allow_experimental {
-            args.push("--allow-experimental".to_string());
-        }
+        append_common_flags(&mut args, &req);
 
         let stdout = self.runner.run(args)?;
         Ok(ExecuteOutput {
@@ -253,116 +207,140 @@ where
     }
 }
 
-fn validate_verify_request(req: &VerifyRequest) -> Result<()> {
-    if req
-        .keys_digest
-        .as_deref()
-        .map(str::trim)
-        .filter(|value| !value.is_empty())
-        .is_none()
-    {
-        return Err(SdkError::InvalidRequest(
-            "keys_digest is required for verify_bundle".to_string(),
-        ));
-    }
-    if req.require_cosign
-        && req
-            .oci_ref
-            .as_deref()
-            .map(str::trim)
-            .filter(|value| !value.is_empty())
-            .is_none()
-    {
-        return Err(SdkError::InvalidRequest(
-            "oci_ref is required when require_cosign is true".to_string(),
-        ));
-    }
-    if req.require_cosign && req.cosign_key.is_none() {
-        return Err(SdkError::InvalidRequest(
-            "cosign_key is required when require_cosign is true".to_string(),
-        ));
-    }
-    if req.require_cosign
-        && req
-            .cosign_cert_identity
-            .as_deref()
-            .map(str::trim)
-            .filter(|value| !value.is_empty())
-            .is_none()
-    {
-        return Err(SdkError::InvalidRequest(
-            "cosign_cert_identity is required when require_cosign is true".to_string(),
-        ));
-    }
-    if req.require_cosign
-        && req
-            .cosign_cert_oidc_issuer
-            .as_deref()
-            .map(str::trim)
-            .filter(|value| !value.is_empty())
-            .is_none()
-    {
-        return Err(SdkError::InvalidRequest(
-            "cosign_cert_oidc_issuer is required when require_cosign is true".to_string(),
-        ));
-    }
-    Ok(())
+trait CommonRequest {
+    fn keys_digest(&self) -> Option<&str>;
+    fn require_cosign(&self) -> bool;
+    fn oci_ref(&self) -> Option<&str>;
+    fn cosign_key(&self) -> Option<&Path>;
+    fn cosign_cert_identity(&self) -> Option<&str>;
+    fn cosign_cert_oidc_issuer(&self) -> Option<&str>;
+    fn allow_experimental(&self) -> bool;
 }
 
-fn validate_execute_request(req: &ExecuteRequest) -> Result<()> {
-    if req
-        .keys_digest
-        .as_deref()
-        .map(str::trim)
-        .filter(|value| !value.is_empty())
-        .is_none()
-    {
-        return Err(SdkError::InvalidRequest(
-            "keys_digest is required for execute_verified".to_string(),
-        ));
+impl CommonRequest for VerifyRequest {
+    fn keys_digest(&self) -> Option<&str> {
+        self.keys_digest.as_deref()
     }
-    if req.require_cosign
-        && req
-            .oci_ref
-            .as_deref()
-            .map(str::trim)
-            .filter(|value| !value.is_empty())
-            .is_none()
-    {
+
+    fn require_cosign(&self) -> bool {
+        self.require_cosign
+    }
+
+    fn oci_ref(&self) -> Option<&str> {
+        self.oci_ref.as_deref()
+    }
+
+    fn cosign_key(&self) -> Option<&Path> {
+        self.cosign_key.as_deref()
+    }
+
+    fn cosign_cert_identity(&self) -> Option<&str> {
+        self.cosign_cert_identity.as_deref()
+    }
+
+    fn cosign_cert_oidc_issuer(&self) -> Option<&str> {
+        self.cosign_cert_oidc_issuer.as_deref()
+    }
+
+    fn allow_experimental(&self) -> bool {
+        self.allow_experimental
+    }
+}
+
+impl CommonRequest for ExecuteRequest {
+    fn keys_digest(&self) -> Option<&str> {
+        self.keys_digest.as_deref()
+    }
+
+    fn require_cosign(&self) -> bool {
+        self.require_cosign
+    }
+
+    fn oci_ref(&self) -> Option<&str> {
+        self.oci_ref.as_deref()
+    }
+
+    fn cosign_key(&self) -> Option<&Path> {
+        self.cosign_key.as_deref()
+    }
+
+    fn cosign_cert_identity(&self) -> Option<&str> {
+        self.cosign_cert_identity.as_deref()
+    }
+
+    fn cosign_cert_oidc_issuer(&self) -> Option<&str> {
+        self.cosign_cert_oidc_issuer.as_deref()
+    }
+
+    fn allow_experimental(&self) -> bool {
+        self.allow_experimental
+    }
+}
+
+fn non_empty_trimmed(value: Option<&str>) -> Option<String> {
+    value
+        .map(str::trim)
+        .filter(|v| !v.is_empty())
+        .map(str::to_string)
+}
+
+fn validate_request(req: &impl CommonRequest, operation: &str) -> Result<String> {
+    let Some(keys_digest) = non_empty_trimmed(req.keys_digest()) else {
+        return Err(SdkError::InvalidRequest(format!(
+            "keys_digest is required for {operation}"
+        )));
+    };
+
+    if !req.require_cosign() {
+        return Ok(keys_digest);
+    }
+
+    if non_empty_trimmed(req.oci_ref()).is_none() {
         return Err(SdkError::InvalidRequest(
             "oci_ref is required when require_cosign is true".to_string(),
         ));
     }
-    if req.require_cosign && req.cosign_key.is_none() {
+    if req.cosign_key().is_none() {
         return Err(SdkError::InvalidRequest(
             "cosign_key is required when require_cosign is true".to_string(),
         ));
     }
-    if req.require_cosign
-        && req
-            .cosign_cert_identity
-            .as_deref()
-            .map(str::trim)
-            .filter(|value| !value.is_empty())
-            .is_none()
-    {
+    if non_empty_trimmed(req.cosign_cert_identity()).is_none() {
         return Err(SdkError::InvalidRequest(
             "cosign_cert_identity is required when require_cosign is true".to_string(),
         ));
     }
-    if req.require_cosign
-        && req
-            .cosign_cert_oidc_issuer
-            .as_deref()
-            .map(str::trim)
-            .filter(|value| !value.is_empty())
-            .is_none()
-    {
+    if non_empty_trimmed(req.cosign_cert_oidc_issuer()).is_none() {
         return Err(SdkError::InvalidRequest(
             "cosign_cert_oidc_issuer is required when require_cosign is true".to_string(),
         ));
     }
-    Ok(())
+    Ok(keys_digest)
+}
+
+fn append_common_flags(args: &mut Vec<String>, req: &impl CommonRequest) {
+    if req.require_cosign() {
+        args.push("--require-cosign".to_string());
+    }
+    if let Some(oci_ref) = non_empty_trimmed(req.oci_ref()) {
+        args.push("--oci-ref".to_string());
+        args.push(oci_ref);
+    }
+    if let Some(cosign_key) = req.cosign_key() {
+        args.push("--cosign-key".to_string());
+        args.push(cosign_key.display().to_string());
+    }
+    if let Some(cosign_cert_identity) = non_empty_trimmed(req.cosign_cert_identity()) {
+        args.push("--cosign-cert-identity".to_string());
+        args.push(cosign_cert_identity);
+    }
+    if let Some(cosign_cert_oidc_issuer) = non_empty_trimmed(req.cosign_cert_oidc_issuer()) {
+        args.push("--cosign-cert-oidc-issuer".to_string());
+        args.push(cosign_cert_oidc_issuer);
+    }
+    if req.allow_experimental() {
+        args.push("--allow-experimental".to_string());
+    }
 }
 
 pub mod experimental {
@@ -457,6 +435,32 @@ mod tests {
         assert!(args.contains(&"--cosign-cert-oidc-issuer".to_string()));
         assert!(args.contains(&"https://token.actions.githubusercontent.com".to_string()));
         assert!(args.contains(&"--allow-experimental".to_string()));
+    }
+
+    #[test]
+    fn verify_trims_keys_digest_before_forwarding() {
+        let runner = FakeRunner::default();
+        let sdk = ProvenactSdk::with_runner(runner);
+
+        let req = VerifyRequest {
+            bundle: PathBuf::from("./bundle"),
+            keys: PathBuf::from("./keys.json"),
+            keys_digest: Some("  sha256:abc  ".to_string()),
+            require_cosign: false,
+            oci_ref: None,
+            cosign_key: None,
+            cosign_cert_identity: None,
+            cosign_cert_oidc_issuer: None,
+            allow_experimental: false,
+        };
+        let _ = sdk.verify_bundle(req).expect("verify ok");
+
+        let args = sdk.runner.last_args.lock().expect("lock").clone();
+        let digest_index = args
+            .iter()
+            .position(|arg| arg == "--keys-digest")
+            .expect("keys digest flag should be present");
+        assert_eq!(args[digest_index + 1], "sha256:abc");
     }
 
     #[test]
