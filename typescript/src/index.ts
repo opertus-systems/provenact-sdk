@@ -123,8 +123,10 @@ export class ProvenactSdk {
   }
 
   async verifyBundle(req: VerifyRequest): Promise<VerifyOutput> {
+    const bundle = validateRequiredPath(req.bundle, "bundle");
+    const keys = validateRequiredPath(req.keys, "keys");
     const keysDigest = validateRequest(req);
-    const args = ["verify", "--bundle", req.bundle, "--keys", req.keys];
+    const args = ["verify", "--bundle", bundle, "--keys", keys];
     args.push("--keys-digest", keysDigest);
     appendCommonFlags(args, req);
 
@@ -133,26 +135,31 @@ export class ProvenactSdk {
   }
 
   async executeVerified(req: ExecuteRequest): Promise<ExecuteOutput> {
+    const bundle = validateRequiredPath(req.bundle, "bundle");
+    const keys = validateRequiredPath(req.keys, "keys");
+    const policy = validateRequiredPath(req.policy, "policy");
+    const input = validateRequiredPath(req.input, "input");
+    const receipt = validateRequiredPath(req.receipt, "receipt");
     const keysDigest = validateRequest(req);
     const args = [
       "run",
       "--bundle",
-      req.bundle,
+      bundle,
       "--keys",
-      req.keys,
+      keys,
       "--keys-digest",
       keysDigest,
       "--policy",
-      req.policy,
+      policy,
       "--input",
-      req.input,
+      input,
       "--receipt",
-      req.receipt,
+      receipt,
     ];
     appendCommonFlags(args, req);
 
     const stdout = await this.runner.run(args);
-    return { stdout, receiptPath: req.receipt };
+    return { stdout, receiptPath: receipt };
   }
 
   async parseReceipt(path: string): Promise<Receipt> {
@@ -184,6 +191,13 @@ export const experimental = {
 function normalizeOptional(value: string | undefined): string | undefined {
   const normalized = value?.trim();
   return normalized ? normalized : undefined;
+}
+
+function validateRequiredPath(path: string, field: string): string {
+  if (typeof path !== "string" || path.trim().length === 0) {
+    throw new SdkError("INVALID_REQUEST", `${field} is required and must not be blank`);
+  }
+  return path;
 }
 
 function validateRequest(req: CommonRequest): string {

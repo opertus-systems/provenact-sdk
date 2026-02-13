@@ -192,6 +192,21 @@ test("verifyBundle rejects missing keysDigest", async () => {
   });
 });
 
+test("verifyBundle rejects blank bundle path", async () => {
+  const runner = new FakeRunner();
+  const sdk = new ProvenactSdk(runner);
+
+  await assert.rejects(() => sdk.verifyBundle({
+    bundle: "   ",
+    keys: "./keys.json",
+    keysDigest: "sha256:abc",
+  }), (err: unknown) => {
+    assert.ok(err instanceof SdkError);
+    assert.equal((err as SdkError).code, "INVALID_REQUEST");
+    return true;
+  });
+});
+
 test("executeVerified rejects blank ociRef when requireCosign is true", async () => {
   const runner = new FakeRunner();
   const sdk = new ProvenactSdk(runner);
@@ -206,6 +221,51 @@ test("executeVerified rejects blank ociRef when requireCosign is true", async ()
     requireCosign: true,
     ociRef: " ",
     cosignKey: "./cosign.pub",
+    cosignCertIdentity: "https://github.com/acme/workflow@refs/heads/main",
+    cosignCertOidcIssuer: "https://token.actions.githubusercontent.com",
+  };
+
+  await assert.rejects(() => sdk.executeVerified(req), (err: unknown) => {
+    assert.ok(err instanceof SdkError);
+    assert.equal((err as SdkError).code, "INVALID_REQUEST");
+    return true;
+  });
+});
+
+test("executeVerified rejects blank receipt path", async () => {
+  const runner = new FakeRunner();
+  const sdk = new ProvenactSdk(runner);
+
+  const req: ExecuteRequest = {
+    bundle: "./bundle",
+    keys: "./keys.json",
+    keysDigest: "sha256:abc",
+    policy: "./policy.json",
+    input: "./input.json",
+    receipt: " ",
+  };
+
+  await assert.rejects(() => sdk.executeVerified(req), (err: unknown) => {
+    assert.ok(err instanceof SdkError);
+    assert.equal((err as SdkError).code, "INVALID_REQUEST");
+    return true;
+  });
+});
+
+test("executeVerified rejects blank cosignKey when requireCosign is true", async () => {
+  const runner = new FakeRunner();
+  const sdk = new ProvenactSdk(runner);
+
+  const req: ExecuteRequest = {
+    bundle: "./bundle",
+    keys: "./keys.json",
+    keysDigest: "sha256:abc",
+    policy: "./policy.json",
+    input: "./input.json",
+    receipt: "./receipt.json",
+    requireCosign: true,
+    ociRef: "ghcr.io/acme/skill:1",
+    cosignKey: "   ",
     cosignCertIdentity: "https://github.com/acme/workflow@refs/heads/main",
     cosignCertOidcIssuer: "https://token.actions.githubusercontent.com",
   };

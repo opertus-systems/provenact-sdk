@@ -156,6 +156,8 @@ where
     }
 
     pub fn verify_bundle(&self, req: VerifyRequest) -> Result<VerifyOutput> {
+        validate_required_path(&req.bundle, "bundle", "verify_bundle")?;
+        validate_required_path(&req.keys, "keys", "verify_bundle")?;
         let keys_digest = validate_request(&req, "verify_bundle")?;
 
         let mut args = vec![
@@ -174,6 +176,11 @@ where
     }
 
     pub fn execute_verified(&self, req: ExecuteRequest) -> Result<ExecuteOutput> {
+        validate_required_path(&req.bundle, "bundle", "execute_verified")?;
+        validate_required_path(&req.keys, "keys", "execute_verified")?;
+        validate_required_path(&req.policy, "policy", "execute_verified")?;
+        validate_required_path(&req.input, "input", "execute_verified")?;
+        validate_required_path(&req.receipt, "receipt", "execute_verified")?;
         let keys_digest = validate_request(&req, "execute_verified")?;
 
         let mut args = vec![
@@ -284,6 +291,19 @@ fn non_empty_trimmed(value: Option<&str>) -> Option<String> {
         .map(str::to_string)
 }
 
+fn has_non_empty_path(path: &Path) -> bool {
+    !path.as_os_str().is_empty()
+}
+
+fn validate_required_path(path: &Path, field: &str, operation: &str) -> Result<()> {
+    if !has_non_empty_path(path) {
+        return Err(SdkError::InvalidRequest(format!(
+            "{field} path is required for {operation}"
+        )));
+    }
+    Ok(())
+}
+
 fn validate_request(req: &impl CommonRequest, operation: &str) -> Result<String> {
     let Some(keys_digest) = non_empty_trimmed(req.keys_digest()) else {
         return Err(SdkError::InvalidRequest(format!(
@@ -300,9 +320,14 @@ fn validate_request(req: &impl CommonRequest, operation: &str) -> Result<String>
             "oci_ref is required when require_cosign is true".to_string(),
         ));
     }
-    if req.cosign_key().is_none() {
+    let Some(cosign_key) = req.cosign_key() else {
         return Err(SdkError::InvalidRequest(
             "cosign_key is required when require_cosign is true".to_string(),
+        ));
+    };
+    if !has_non_empty_path(cosign_key) {
+        return Err(SdkError::InvalidRequest(
+            "cosign_key must not be an empty path".to_string(),
         ));
     }
     if non_empty_trimmed(req.cosign_cert_identity()).is_none() {
@@ -326,7 +351,7 @@ fn append_common_flags(args: &mut Vec<String>, req: &impl CommonRequest) {
         args.push("--oci-ref".to_string());
         args.push(oci_ref);
     }
-    if let Some(cosign_key) = req.cosign_key() {
+    if let Some(cosign_key) = req.cosign_key().filter(|path| has_non_empty_path(path)) {
         args.push("--cosign-key".to_string());
         args.push(cosign_key.display().to_string());
     }
@@ -508,6 +533,27 @@ mod tests {
     }
 
     #[test]
+    fn verify_rejects_empty_bundle_path() {
+        let runner = FakeRunner::default();
+        let sdk = ProvenactSdk::with_runner(runner);
+
+        let req = VerifyRequest {
+            bundle: PathBuf::new(),
+            keys: PathBuf::from("./keys.json"),
+            keys_digest: Some("sha256:abc".to_string()),
+            require_cosign: false,
+            oci_ref: None,
+            cosign_key: None,
+            cosign_cert_identity: None,
+            cosign_cert_oidc_issuer: None,
+            allow_experimental: false,
+        };
+
+        let err = sdk.verify_bundle(req).expect_err("must fail");
+        assert!(matches!(err, SdkError::InvalidRequest(_)));
+    }
+
+    #[test]
     fn execute_rejects_blank_oci_ref_when_cosign_required() {
         let runner = FakeRunner::default();
         let sdk = ProvenactSdk::with_runner(runner);
@@ -521,6 +567,56 @@ mod tests {
             require_cosign: true,
             oci_ref: Some(" ".to_string()),
             cosign_key: Some(PathBuf::from("./cosign.pub")),
+            cosign_cert_identity: Some(
+                "https://github.com/acme/workflow@refs/heads/main".to_string(),
+            ),
+            cosign_cert_oidc_issuer: Some(
+                "https://token.actions.githubusercontent.com".to_string(),
+            ),
+            allow_experimental: false,
+        };
+
+        let err = sdk.execute_verified(req).expect_err("must fail");
+        assert!(matches!(err, SdkError::InvalidRequest(_)));
+    }
+
+    #[test]
+    fn execute_rejects_empty_receipt_path() {
+        let runner = FakeRunner::default();
+        let sdk = ProvenactSdk::with_runner(runner);
+        let req = ExecuteRequest {
+            bundle: PathBuf::from("./bundle"),
+            keys: PathBuf::from("./keys.json"),
+            keys_digest: Some("sha256:abc".to_string()),
+            policy: PathBuf::from("./policy.json"),
+            input: PathBuf::from("./input.json"),
+            receipt: PathBuf::new(),
+            require_cosign: false,
+            oci_ref: None,
+            cosign_key: None,
+            cosign_cert_identity: None,
+            cosign_cert_oidc_issuer: None,
+            allow_experimental: false,
+        };
+
+        let err = sdk.execute_verified(req).expect_err("must fail");
+        assert!(matches!(err, SdkError::InvalidRequest(_)));
+    }
+
+    #[test]
+    fn execute_rejects_empty_cosign_key_path_when_required() {
+        let runner = FakeRunner::default();
+        let sdk = ProvenactSdk::with_runner(runner);
+        let req = ExecuteRequest {
+            bundle: PathBuf::from("./bundle"),
+            keys: PathBuf::from("./keys.json"),
+            keys_digest: Some("sha256:abc".to_string()),
+            policy: PathBuf::from("./policy.json"),
+            input: PathBuf::from("./input.json"),
+            receipt: PathBuf::from("./receipt.json"),
+            require_cosign: true,
+            oci_ref: Some("ghcr.io/acme/skill:1".to_string()),
+            cosign_key: Some(PathBuf::new()),
             cosign_cert_identity: Some(
                 "https://github.com/acme/workflow@refs/heads/main".to_string(),
             ),
