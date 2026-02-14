@@ -241,6 +241,22 @@ test("verifyBundle rejects blank bundle path", async () => {
   });
 });
 
+test("verifyBundle rejects bundle path with boundary whitespace", async () => {
+  const runner = new FakeRunner();
+  const sdk = new ProvenactSdk(runner);
+
+  await assert.rejects(() => sdk.verifyBundle({
+    bundle: " ./bundle",
+    keys: "./keys.json",
+    keysDigest: TEST_KEYS_DIGEST,
+  }), (err: unknown) => {
+    assert.ok(err instanceof SdkError);
+    assert.equal((err as SdkError).code, "INVALID_REQUEST");
+    assert.match((err as SdkError).message, /must not include leading\/trailing whitespace/);
+    return true;
+  });
+});
+
 test("executeVerified rejects blank ociRef when requireCosign is true", async () => {
   const runner = new FakeRunner();
   const sdk = new ProvenactSdk(runner);
@@ -282,6 +298,18 @@ test("executeVerified rejects blank receipt path", async () => {
   await assert.rejects(() => sdk.executeVerified(req), (err: unknown) => {
     assert.ok(err instanceof SdkError);
     assert.equal((err as SdkError).code, "INVALID_REQUEST");
+    return true;
+  });
+});
+
+test("parseReceipt rejects control characters in path", async () => {
+  const runner = new FakeRunner();
+  const sdk = new ProvenactSdk(runner);
+
+  await assert.rejects(() => sdk.parseReceipt("receipt\n.json"), (err: unknown) => {
+    assert.ok(err instanceof SdkError);
+    assert.equal((err as SdkError).code, "INVALID_REQUEST");
+    assert.match((err as SdkError).message, /must not include leading\/trailing whitespace/);
     return true;
   });
 });

@@ -219,6 +219,12 @@ function validateRequiredPath(path: string, field: string): string {
   if (typeof path !== "string" || path.trim().length === 0) {
     throw new SdkError("INVALID_REQUEST", `${field} is required and must not be blank`);
   }
+  if (path !== path.trim() || /[\u0000-\u001f\u007f]/.test(path)) {
+    throw new SdkError(
+      "INVALID_REQUEST",
+      `${field} must not include leading/trailing whitespace or control characters`
+    );
+  }
   return path;
 }
 

@@ -315,10 +315,20 @@ fn has_non_empty_path(path: &Path) -> bool {
     !path.as_os_str().is_empty()
 }
 
+fn has_disallowed_path_chars(path: &Path) -> bool {
+    let rendered = path.as_os_str().to_string_lossy();
+    rendered.trim() != rendered || rendered.chars().any(char::is_control)
+}
+
 fn validate_required_path(path: &Path, field: &str, operation: &str) -> Result<()> {
     if !has_non_empty_path(path) {
         return Err(SdkError::InvalidRequest(format!(
             "{field} path is required for {operation}"
+        )));
+    }
+    if has_disallowed_path_chars(path) {
+        return Err(SdkError::InvalidRequest(format!(
+            "{field} path for {operation} must not include leading/trailing whitespace or control characters"
         )));
     }
     Ok(())
@@ -631,6 +641,27 @@ mod tests {
     }
 
     #[test]
+    fn verify_rejects_bundle_path_with_boundary_whitespace() {
+        let runner = FakeRunner::default();
+        let sdk = ProvenactSdk::with_runner(runner);
+
+        let req = VerifyRequest {
+            bundle: PathBuf::from(" ./bundle"),
+            keys: PathBuf::from("./keys.json"),
+            keys_digest: Some(TEST_KEYS_DIGEST.to_string()),
+            require_cosign: false,
+            oci_ref: None,
+            cosign_key: None,
+            cosign_cert_identity: None,
+            cosign_cert_oidc_issuer: None,
+            allow_experimental: false,
+        };
+
+        let err = sdk.verify_bundle(req).expect_err("must fail");
+        assert!(matches!(err, SdkError::InvalidRequest(_)));
+    }
+
+    #[test]
     fn execute_rejects_blank_oci_ref_when_cosign_required() {
         let runner = FakeRunner::default();
         let sdk = ProvenactSdk::with_runner(runner);
@@ -725,6 +756,17 @@ mod tests {
         let sdk = ProvenactSdk::with_runner(runner);
 
         let err = sdk.parse_receipt(PathBuf::new()).expect_err("must fail");
+        assert!(matches!(err, SdkError::InvalidRequest(_)));
+    }
+
+    #[test]
+    fn parse_receipt_rejects_control_characters_in_path() {
+        let runner = FakeRunner::default();
+        let sdk = ProvenactSdk::with_runner(runner);
+
+        let err = sdk
+            .parse_receipt(PathBuf::from("receipt\n.json"))
+            .expect_err("must fail");
         assert!(matches!(err, SdkError::InvalidRequest(_)));
     }
 
