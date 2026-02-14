@@ -1,4 +1,5 @@
 use std::ffi::{OsStr, OsString};
+use std::io::Read;
 use std::path::{Component, Path, PathBuf};
 use std::process::Command;
 
@@ -208,7 +209,8 @@ where
     pub fn parse_receipt(&self, path: impl AsRef<Path>) -> Result<Receipt> {
         let path = path.as_ref();
         validate_required_path(path, "receipt", "parse_receipt")?;
-        let metadata = std::fs::metadata(path)?;
+        let file = std::fs::File::open(path)?;
+        let metadata = file.metadata()?;
         if !metadata.is_file() {
             return Err(SdkError::InvalidRequest(
                 "receipt path must point to a regular file".to_string(),
@@ -219,7 +221,9 @@ where
                 "receipt file exceeds maximum size of {MAX_RECEIPT_BYTES} bytes"
             )));
         }
-        let data = std::fs::read(path)?;
+        let mut reader = file.take(MAX_RECEIPT_BYTES + 1);
+        let mut data = Vec::new();
+        reader.read_to_end(&mut data)?;
         if data.len() as u64 > MAX_RECEIPT_BYTES {
             return Err(SdkError::InvalidRequest(format!(
                 "receipt file exceeds maximum size of {MAX_RECEIPT_BYTES} bytes"
@@ -734,6 +738,23 @@ mod tests {
 
         let err = sdk.parse_receipt(&receipt_path).expect_err("must fail");
         assert!(matches!(err, SdkError::InvalidRequest(_)));
+    }
+
+    #[test]
+    fn parse_receipt_accepts_file_at_size_limit() {
+        let runner = FakeRunner::default();
+        let sdk = ProvenactSdk::with_runner(runner);
+        let dir = tempfile::tempdir().expect("tmp");
+        let receipt_path = dir.path().join("receipt.json");
+
+        let mut payload = String::from("{\"payload\":\"");
+        payload.push_str(&"x".repeat((MAX_RECEIPT_BYTES as usize) - payload.len() - 2));
+        payload.push_str("\"}");
+        assert_eq!(payload.len(), MAX_RECEIPT_BYTES as usize);
+        std::fs::write(&receipt_path, payload.as_bytes()).expect("write");
+
+        let receipt = sdk.parse_receipt(&receipt_path).expect("parse");
+        assert!(receipt.raw.get("payload").is_some());
     }
 
     #[test]
