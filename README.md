@@ -77,6 +77,8 @@ println!("{}", receipt.raw["schema_version"]);
 
 When `require_cosign` is `true`, set all of: `oci_ref`, `cosign_key`,
 `cosign_cert_identity`, and `cosign_cert_oidc_issuer`.
+`keys_digest` must use `sha256:<64 lowercase hex>`.
+`parse_receipt` only accepts regular files up to 1 MiB.
 
 ## Versioning
 

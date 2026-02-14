@@ -6,6 +6,8 @@ use serde_json::Value;
 use thiserror::Error;
 
 pub type Result<T> = std::result::Result<T, SdkError>;
+const SHA256_HEX_LEN: usize = 64;
+const MAX_RECEIPT_BYTES: u64 = 1_048_576;
 
 #[derive(Debug, Clone)]
 pub struct VerifyRequest {
@@ -208,7 +210,25 @@ where
     }
 
     pub fn parse_receipt(&self, path: impl AsRef<Path>) -> Result<Receipt> {
-        let data = std::fs::read(path.as_ref())?;
+        let path = path.as_ref();
+        validate_required_path(path, "receipt", "parse_receipt")?;
+        let metadata = std::fs::metadata(path)?;
+        if !metadata.is_file() {
+            return Err(SdkError::InvalidRequest(
+                "receipt path must point to a regular file".to_string(),
+            ));
+        }
+        if metadata.len() > MAX_RECEIPT_BYTES {
+            return Err(SdkError::InvalidRequest(format!(
+                "receipt file exceeds maximum size of {MAX_RECEIPT_BYTES} bytes"
+            )));
+        }
+        let data = std::fs::read(path)?;
+        if data.len() as u64 > MAX_RECEIPT_BYTES {
+            return Err(SdkError::InvalidRequest(format!(
+                "receipt file exceeds maximum size of {MAX_RECEIPT_BYTES} bytes"
+            )));
+        }
         let raw: Value = serde_json::from_slice(&data)?;
         Ok(Receipt { raw })
     }
@@ -310,6 +330,11 @@ fn validate_request(req: &impl CommonRequest, operation: &str) -> Result<String>
             "keys_digest is required for {operation}"
         )));
     };
+    if !is_valid_sha256_prefixed_hex(&keys_digest) {
+        return Err(SdkError::InvalidRequest(
+            "keys_digest must match sha256:<64 lowercase hex>".to_string(),
+        ));
+    }
 
     if !req.require_cosign() {
         return Ok(keys_digest);
@@ -368,6 +393,16 @@ fn append_common_flags(args: &mut Vec<String>, req: &impl CommonRequest) {
     }
 }
 
+fn is_valid_sha256_prefixed_hex(value: &str) -> bool {
+    let Some(digest_hex) = value.strip_prefix("sha256:") else {
+        return false;
+    };
+    digest_hex.len() == SHA256_HEX_LEN
+        && digest_hex
+            .bytes()
+            .all(|byte| byte.is_ascii_digit() || (b'a'..=b'f').contains(&byte))
+}
+
 pub mod experimental {
     use super::*;
 
@@ -397,6 +432,8 @@ pub mod experimental {
 #[cfg(test)]
 mod tests {
     use super::*;
+    const TEST_KEYS_DIGEST: &str =
+        "sha256:0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef";
 
     #[derive(Default)]
     struct FakeRunner {
@@ -426,7 +463,7 @@ mod tests {
         let req = VerifyRequest {
             bundle: PathBuf::from("./bundle"),
             keys: PathBuf::from("./keys.json"),
-            keys_digest: Some("sha256:abc".to_string()),
+            keys_digest: Some(TEST_KEYS_DIGEST.to_string()),
             require_cosign: true,
             oci_ref: Some("ghcr.io/acme/skill:1".to_string()),
             cosign_key: Some(PathBuf::from("./cosign.pub")),
@@ -449,7 +486,7 @@ mod tests {
             "./keys.json".to_string()
         ]));
         assert!(args.contains(&"--keys-digest".to_string()));
-        assert!(args.contains(&"sha256:abc".to_string()));
+        assert!(args.contains(&TEST_KEYS_DIGEST.to_string()));
         assert!(args.contains(&"--require-cosign".to_string()));
         assert!(args.contains(&"--oci-ref".to_string()));
         assert!(args.contains(&"ghcr.io/acme/skill:1".to_string()));
@@ -470,7 +507,7 @@ mod tests {
         let req = VerifyRequest {
             bundle: PathBuf::from("./bundle"),
             keys: PathBuf::from("./keys.json"),
-            keys_digest: Some("  sha256:abc  ".to_string()),
+            keys_digest: Some(format!("  {TEST_KEYS_DIGEST}  ")),
             require_cosign: false,
             oci_ref: None,
             cosign_key: None,
@@ -485,7 +522,7 @@ mod tests {
             .iter()
             .position(|arg| arg == "--keys-digest")
             .expect("keys digest flag should be present");
-        assert_eq!(args[digest_index + 1], "sha256:abc");
+        assert_eq!(args[digest_index + 1], TEST_KEYS_DIGEST);
     }
 
     #[test]
@@ -533,6 +570,27 @@ mod tests {
     }
 
     #[test]
+    fn verify_rejects_invalid_keys_digest_format() {
+        let runner = FakeRunner::default();
+        let sdk = ProvenactSdk::with_runner(runner);
+
+        let req = VerifyRequest {
+            bundle: PathBuf::from("./bundle"),
+            keys: PathBuf::from("./keys.json"),
+            keys_digest: Some("sha256:xyz".to_string()),
+            require_cosign: false,
+            oci_ref: None,
+            cosign_key: None,
+            cosign_cert_identity: None,
+            cosign_cert_oidc_issuer: None,
+            allow_experimental: false,
+        };
+
+        let err = sdk.verify_bundle(req).expect_err("must fail");
+        assert!(matches!(err, SdkError::InvalidRequest(_)));
+    }
+
+    #[test]
     fn verify_rejects_empty_bundle_path() {
         let runner = FakeRunner::default();
         let sdk = ProvenactSdk::with_runner(runner);
@@ -540,7 +598,7 @@ mod tests {
         let req = VerifyRequest {
             bundle: PathBuf::new(),
             keys: PathBuf::from("./keys.json"),
-            keys_digest: Some("sha256:abc".to_string()),
+            keys_digest: Some(TEST_KEYS_DIGEST.to_string()),
             require_cosign: false,
             oci_ref: None,
             cosign_key: None,
@@ -560,7 +618,7 @@ mod tests {
         let req = ExecuteRequest {
             bundle: PathBuf::from("./bundle"),
             keys: PathBuf::from("./keys.json"),
-            keys_digest: Some("sha256:abc".to_string()),
+            keys_digest: Some(TEST_KEYS_DIGEST.to_string()),
             policy: PathBuf::from("./policy.json"),
             input: PathBuf::from("./input.json"),
             receipt: PathBuf::from("./receipt.json"),
@@ -587,7 +645,7 @@ mod tests {
         let req = ExecuteRequest {
             bundle: PathBuf::from("./bundle"),
             keys: PathBuf::from("./keys.json"),
-            keys_digest: Some("sha256:abc".to_string()),
+            keys_digest: Some(TEST_KEYS_DIGEST.to_string()),
             policy: PathBuf::from("./policy.json"),
             input: PathBuf::from("./input.json"),
             receipt: PathBuf::new(),
@@ -610,7 +668,7 @@ mod tests {
         let req = ExecuteRequest {
             bundle: PathBuf::from("./bundle"),
             keys: PathBuf::from("./keys.json"),
-            keys_digest: Some("sha256:abc".to_string()),
+            keys_digest: Some(TEST_KEYS_DIGEST.to_string()),
             policy: PathBuf::from("./policy.json"),
             input: PathBuf::from("./input.json"),
             receipt: PathBuf::from("./receipt.json"),
@@ -640,5 +698,26 @@ mod tests {
 
         let receipt = sdk.parse_receipt(&receipt_path).expect("parse");
         assert_eq!(receipt.raw["schema_version"], "1.0.0");
+    }
+
+    #[test]
+    fn parse_receipt_rejects_empty_path() {
+        let runner = FakeRunner::default();
+        let sdk = ProvenactSdk::with_runner(runner);
+
+        let err = sdk.parse_receipt(PathBuf::new()).expect_err("must fail");
+        assert!(matches!(err, SdkError::InvalidRequest(_)));
+    }
+
+    #[test]
+    fn parse_receipt_rejects_oversized_file() {
+        let runner = FakeRunner::default();
+        let sdk = ProvenactSdk::with_runner(runner);
+        let dir = tempfile::tempdir().expect("tmp");
+        let receipt_path = dir.path().join("receipt.json");
+        std::fs::write(&receipt_path, vec![b'x'; (MAX_RECEIPT_BYTES as usize) + 1]).expect("write");
+
+        let err = sdk.parse_receipt(&receipt_path).expect_err("must fail");
+        assert!(matches!(err, SdkError::InvalidRequest(_)));
     }
 }
